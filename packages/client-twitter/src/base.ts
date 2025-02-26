@@ -10,6 +10,7 @@ import {
     stringToUuid,
     ActionTimelineType,
 } from "@elizaos/core";
+import { SocksProxyAgent } from "socks-proxy-agent";
 import {
     type QueryTweetsResponse,
     Scraper,
@@ -239,7 +240,19 @@ export class ClientBase extends EventEmitter {
         if (ClientBase._twitterClients[username]) {
             this.twitterClient = ClientBase._twitterClients[username];
         } else {
-            this.twitterClient = new Scraper();
+            const proxyUrl = this.runtime.getSetting("TWITTER_SOCKS_PROXY");
+            const agent = new SocksProxyAgent(proxyUrl);
+
+            this.twitterClient = new Scraper({
+                fetch: async (
+                    input: RequestInfo | URL,
+                    init?: RequestInit
+                ): Promise<Response> => {
+                    init = init || {};
+                    (init as any).agent = agent; // Attach the SOCKS5 agent
+                    return fetch(input, init);
+                },
+            });
             ClientBase._twitterClients[username] = this.twitterClient;
         }
 
@@ -265,7 +278,7 @@ export class ClientBase extends EventEmitter {
         const ct0 = this.runtime.getSetting("TWITTER_COOKIES_CT0");
         const guestId = this.runtime.getSetting("TWITTER_COOKIES_GUEST_ID");
 
-        const createTwitterCookies = (authToken: string, ct0: string, guestId: string) => 
+        const createTwitterCookies = (authToken: string, ct0: string, guestId: string) =>
         authToken && ct0 && guestId
             ? [
                 { key: 'auth_token', value: authToken, domain: '.twitter.com' },
